@@ -1,0 +1,22 @@
+﻿.user-table-container {
+}
+.table-name-area {
+    font-weight: bold;
+}
+.table-name-area:hover {
+    cursor: default;
+}
+.dept-area:hover {
+    cursor: default;
+}
+
+.user-area {
+    margin-bottom: 10px;
+}
+.user-area:hover {
+    cursor: pointer;
+}
+
+.name-area {
+    font-weight: bold;
+}

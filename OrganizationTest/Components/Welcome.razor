@@ -1,0 +1,206 @@
+﻿@using Azure.Core
+@using Microsoft.Extensions.Configuration
+@using Microsoft.AspNetCore.Hosting
+@using Microsoft.Extensions.Hosting
+@using Microsoft.Graph
+@using System.Linq
+@using OrganizationTest.Model
+@inject TeamsFx teamsfx
+@inject TeamsUserCredential teamsUserCredential
+@inject MicrosoftTeams MicrosoftTeams
+@inject IWebHostEnvironment HostEnvironment
+@inject IConfiguration Configuration
+@inject NavigationManager MyNavigationManager
+
+@if(_isLoading)
+{
+    <div style="display: flex; justify-content: center; align-items: center; min-height: 100vh;">
+		<FluentProgressRing/>
+	</div>
+}
+else
+{
+    <div class="welcome page">
+        <div class="narrow page-padding">
+            @if (_errorMessage.Length > 0)
+            {
+                <a>@_errorMessage</a>
+            }
+            @if (_selectUsers.Count > 0 && _isInTeams)
+            {
+                <div>
+                    <button @onclick=CallUserEvent>전화하기</button>
+                </div>   
+            }
+            <table>
+                <tr>
+                    <td>
+                        @if (_userDept.Count > 0 && _isInTeams)
+                        {
+                            <h3>전체 목록</h3>
+                            <UserTable UserModel="_userDept" SelectedUserModel="_selectUsers" IsRoot=true OnSelectUserEvent="SelectUser"/>
+                        }
+                    </td>
+                    <td>
+                        @if (_selectUsers.Count > 0 && _isInTeams)
+                        {
+                            <h3>전화 걸 사람</h3>
+                            <table>
+                                    @for (var i = 0; i < _selectUsers.Count; i++)
+                                    {
+                                        var userBuff = _selectUsers[i];
+                                        <tr class="user-area" @onclick="() => UnSelectUserEvent(userBuff)">
+                                            <td>
+                                                <a class="name-area">
+                                                    @_selectUsers[i].DisplayName
+                                                </a>
+                                                <a class="job-area">
+                                                    @_selectUsers[i].JobTitle
+                                                </a>
+                                                <a class="mail-area">
+                                                    @_selectUsers[i].Mail
+                                                </a>
+                                            </td>   
+                                        </tr>
+                                    }
+                            </table>
+                        }
+                    </td>
+                </tr>
+            </table>
+        </div>
+    </div>
+}
+
+@code {
+    string _errorMessage = "";
+    List<UserDeptModel> _userDept = new();
+    List<User> _allUsers = new();
+    List<User> _selectUsers = new();
+    User _currentUser;
+    bool _isInTeams;
+    bool _isLoading = true;
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        await base.OnAfterRenderAsync(firstRender);
+
+        if(firstRender)
+        {
+            _isInTeams = await MicrosoftTeams.IsInTeams();
+
+            if (_isInTeams)
+            {
+                await InitUserTable();
+            }
+            else
+            {
+                _errorMessage = "팀스 앱 안에서만 동작합니다.";
+            }
+
+            _isLoading = false;
+            StateHasChanged();            
+        }
+    }
+    private async Task InitUserTable()
+    {
+        try
+        {
+            var currentUser = await teamsUserCredential.GetUserInfoAsync();
+            var users = (await GetGraphService().Users.Request().GetAsync()).CurrentPage;
+            for (int i = 0; i < users.Count; i++)
+            {
+                if (users[i].Id == currentUser.ObjectId)
+                {
+                    _currentUser = users[i];
+                    continue;
+                }
+                if (users[i].Mail == null || users[i].Mail.Length <= 0)
+                {
+                    continue;
+                }
+                if (users[i].DisplayName.Contains("관리자"))
+                {
+                    continue;
+                }
+                _allUsers.Add(users[i]);
+            }
+
+            _allUsers.Sort(delegate (User x, User y)
+            {
+                if (x.OfficeLocation == null && y.OfficeLocation == null) return 0;
+                else if (x.OfficeLocation == null) return -1;
+                else if (y.OfficeLocation == null) return 1;
+                else return x.OfficeLocation.CompareTo(y.OfficeLocation);
+            });
+
+            _allUsers.FindAll(x => !x.OfficeLocation.Contains("/")).ForEach(x =>
+            {
+                _userDept.Add(new UserDeptModel(x.OfficeLocation, x));
+            });
+
+            _allUsers.FindAll(x => x.OfficeLocation.Contains("/")).ForEach(x =>
+            {
+                UserDeptModel.SetChild(_userDept, x, 0);
+            });
+        }
+        catch(Exception ex)
+        {
+            _errorMessage = ex.Message;
+        }
+    }
+    private void SelectUser(User user)
+    {
+        if (_selectUsers.Find(x => x == user) == null)
+        {
+            _selectUsers.Add(user);
+        }
+    }
+    private void UnSelectUserEvent(User user)
+    {
+        _selectUsers.Remove(user);
+    }
+    private async void CallUserEvent()
+    {
+        List<InvitationParticipantInfo> target = new();
+        _selectUsers.ForEach(x =>
+        {
+            target.Add(new InvitationParticipantInfo
+            {
+                Identity = new IdentitySet
+                {
+                    User = new Identity
+                    {
+                        DisplayName = x.DisplayName,
+                        Id = x.Id
+                    }
+                }
+            });
+        });
+
+        var call = new Call
+        {
+	        CallbackUri = "https://bot.contoso.com/callback",
+	        Targets = target,
+	        RequestedModalities = new List<Modality>()
+	        {
+		        Modality.Audio
+	        },
+	        MediaConfig = new ServiceHostedMediaConfig()
+        };
+
+        try
+        {
+            var ret = await GetGraphService().Communications.Calls.Request().AddAsync(call);
+        }
+        catch (Exception ex)
+        {
+            _errorMessage = ex.Message;
+        }
+    }
+    private GraphServiceClient GetGraphService()
+    {
+        return new(teamsUserCredential);
+    }
+}
+
