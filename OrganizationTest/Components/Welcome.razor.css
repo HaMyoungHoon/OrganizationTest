@@ -1,41 +1,21 @@
-﻿.narrow {
-    max-width: 1080px;
-    margin: 0 auto;
+﻿.welcome-container {
 }
 
-.page-padding {
-    padding: 0.5rem;
+.user-table {
+    width: 1000px;
+    height: 1000px;
+    margin-left: 50px;
+    margin-top: 0;
 }
 
-.welcome.page > .narrow > img {
-    margin: 0 auto;
-    display: block;
-    width: 200px;
+.search-user-table {
+    width: 400px;
 }
 
-.welcome.page > .narrow > .menu {
-    width: 80%;
-    justify-content: space-between;
-    margin: 4rem auto;
-    border-bottom: none;
+.all-user-table {
+    width: 400px;
 }
 
-    .welcome.page > .narrow > .menu > .menu-item {
-        background-color: inherit;
-        margin: auto;
-        font-size: 14px;
-        min-height: 32px;
-        border-bottom-color: rgb(98, 100, 167);
-    }
+.select-user-table {
 
-.center {
-    text-align: center;
-}
-
-.sections > * {
-    margin: 4rem auto;
-}
-
-.error {
-    color: red;
 }

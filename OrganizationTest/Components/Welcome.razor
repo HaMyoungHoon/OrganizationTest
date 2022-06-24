@@ -5,6 +5,8 @@
 @using Microsoft.Graph
 @using System.Linq
 @using OrganizationTest.Model
+
+@inject IJSRuntime JSRuntime
 @inject TeamsFx teamsfx
 @inject TeamsUserCredential teamsUserCredential
 @inject MicrosoftTeams MicrosoftTeams
@@ -18,61 +20,55 @@
 		<FluentProgressRing/>
 	</div>
 }
+else if (_isInTeams)
+{
+    <div class="welcome-container">
+        @if (_errorMessage.Length > 0)
+        {
+            <a>@_errorMessage</a>
+        }
+        @if (_selectUsers.Count > 0)
+        {
+            <div>
+                <button @onclick=CallUserEvent>채팅하기</button>
+            </div>   
+        }
+        <table class="user-table">
+            <tr>
+                <td class="search-user-table">
+                    <h3>유저 검색</h3>
+                    <SearchUserTable SelectUser="_selectUsers" OnSelectSearchUserEvent="SelectSearchUser" />
+                </td>
+                <td class="all-user-table">
+                    @if (_userDept.Count > 0)
+                    {
+                        <h3>전체 목록</h3>
+                        <UserTable UserModel="_userDept" SelectedUserModel="_selectUsers" IsRoot=true OnSelectUserEvent="SelectUser"/>
+                    }
+                </td>
+                <td class="select-user-table">
+                    @if (_selectUsers.Count > 0)
+                    {
+                        <h3>선택 된 사람</h3>
+                        <SelectUserTable SelectUser="_selectUsers" OnUnSelectUserEvent="UnSelectUserEvent" />
+                    }
+                </td>
+            </tr>
+        </table>
+    </div>
+}
 else
 {
-    <div class="welcome page">
-        <div class="narrow page-padding">
-            @if (_errorMessage.Length > 0)
-            {
-                <a>@_errorMessage</a>
-            }
-            @if (_selectUsers.Count > 0 && _isInTeams)
-            {
-                <div>
-                    <button @onclick=CallUserEvent>전화하기</button>
-                </div>   
-            }
-            <table>
-                <tr>
-                    <td>
-                        @if (_userDept.Count > 0 && _isInTeams)
-                        {
-                            <h3>전체 목록</h3>
-                            <UserTable UserModel="_userDept" SelectedUserModel="_selectUsers" IsRoot=true OnSelectUserEvent="SelectUser"/>
-                        }
-                    </td>
-                    <td>
-                        @if (_selectUsers.Count > 0 && _isInTeams)
-                        {
-                            <h3>전화 걸 사람</h3>
-                            <table>
-                                    @for (var i = 0; i < _selectUsers.Count; i++)
-                                    {
-                                        var userBuff = _selectUsers[i];
-                                        <tr class="user-area" @onclick="() => UnSelectUserEvent(userBuff)">
-                                            <td>
-                                                <a class="name-area">
-                                                    @_selectUsers[i].DisplayName
-                                                </a>
-                                                <a class="job-area">
-                                                    @_selectUsers[i].JobTitle
-                                                </a>
-                                                <a class="mail-area">
-                                                    @_selectUsers[i].Mail
-                                                </a>
-                                            </td>   
-                                        </tr>
-                                    }
-                            </table>
-                        }
-                    </td>
-                </tr>
-            </table>
-        </div>
-    </div>
+    @if (_errorMessage.Length > 0)
+    {
+        <a>@_errorMessage</a>
+    }
 }
 
 @code {
+    // add search componenet
+    // css 정리
+
     string _errorMessage = "";
     List<UserDeptModel> _userDept = new();
     List<User> _allUsers = new();
@@ -149,6 +145,10 @@ else
             _errorMessage = ex.Message;
         }
     }
+    private void SelectSearchUser(User user)
+    {
+        
+    }
     private void SelectUser(User user)
     {
         if (_selectUsers.Find(x => x == user) == null)
@@ -162,41 +162,52 @@ else
     }
     private async void CallUserEvent()
     {
-        List<InvitationParticipantInfo> target = new();
+        ChatMembersCollectionPage members = new();
+
+        members.Add(new AadUserConversationMember
+        {
+            Roles = new List<string>()
+            {
+              "owner"  
+            },
+            AdditionalData = new Dictionary<string, object>()
+            {
+                {"user@odata.bind", $"https://graph.microsoft.com/v1.0/users('{_currentUser.Id}')"}
+            }
+        });
         _selectUsers.ForEach(x =>
         {
-            target.Add(new InvitationParticipantInfo
+            members.Add(new AadUserConversationMember
             {
-                Identity = new IdentitySet
+                Roles = new List<string>()
                 {
-                    User = new Identity
-                    {
-                        DisplayName = x.DisplayName,
-                        Id = x.Id
-                    }
+                    "owner"
+                },
+                AdditionalData = new Dictionary<string, object>()
+                {
+                    {"user@odata.bind", $"https://graph.microsoft.com/v1.0/users('{x.Id}')"}
                 }
             });
         });
-
-        var call = new Call
+        var chat = new Chat
         {
-	        CallbackUri = "https://bot.contoso.com/callback",
-	        Targets = target,
-	        RequestedModalities = new List<Modality>()
-	        {
-		        Modality.Audio
-	        },
-	        MediaConfig = new ServiceHostedMediaConfig()
+            ChatType = ChatType.Group,
+            Topic = $"{DateTime.Now.ToString("yyyy-MM-dd hh시 mm분 ss초")} org service",
+            Members = members,
         };
 
         try
         {
-            var ret = await GetGraphService().Communications.Calls.Request().AddAsync(call);
+            var ret = await GetGraphService().Chats.Request().AddAsync(chat);
+            var webUrl = ret.AdditionalData["webUrl"].ToString();
+            await JSRuntime.InvokeVoidAsync("open", $"{webUrl}", "_blank");
         }
         catch (Exception ex)
         {
+            await JSRuntime.InvokeVoidAsync("alert", ex.Message);
             _errorMessage = ex.Message;
         }
+        return;
     }
     private GraphServiceClient GetGraphService()
     {
