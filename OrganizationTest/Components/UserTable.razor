@@ -60,7 +60,7 @@
     }
     private string IsSelectUser(User user)
     {
-        if (SelectedUserModel.Find(x => x == user) != null)
+        if (SelectedUserModel.Find(x => x.Id == user.Id) != null)
         {
             return "[V]";
         }

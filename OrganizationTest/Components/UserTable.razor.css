@@ -5,10 +5,13 @@
     font-weight: bold;
 }
 
-    .table-name-area:hover {
-        cursor: default;
-    }
+.table-name-area:hover {
+    cursor: default;
+}
 
+.dept-area {
+    color: forestgreen;
+}
 .dept-area:hover {
     cursor: default;
 }

@@ -1,3 +1,6 @@
 ﻿.select-user-table-container {
+}
 
+.user-area:hover {
+    cursor: pointer;
 }

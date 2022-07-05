@@ -40,3 +40,16 @@ app.UseEndpoints(endpoints =>
 
 app.Run();
 
+/*
+ * 
+ * 
+      <aspNetCore processPath="dotnet" arguments=".\OrganizationTest.dll" stdoutLogEnabled="false" stdoutLogFile=".\logs\stdout" hostingModel="inprocess">
+		<environmentVariables>
+			<environmentVariable name="ASPNETCORE_ENVIRONMENT" value="Development" />
+		</environmentVariables>
+	  </aspNetCore>
+ * 
+ * 
+ * 
+ * 
+ */

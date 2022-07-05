@@ -27,34 +27,29 @@ else if (_isInTeams)
         {
             <a>@_errorMessage</a>
         }
-        @if (_selectUsers.Count > 0)
-        {
-            <div>
-                <button @onclick=CallUserEvent>채팅하기</button>
-            </div>   
-        }
-        <table class="user-table">
-            <tr>
-                <td class="search-user-table">
-                    <h3>유저 검색</h3>
-                    <SearchUserTable SelectUser="_selectUsers" OnSelectSearchUserEvent="SelectSearchUser" />
-                </td>
-                <td class="all-user-table">
-                    @if (_userDept.Count > 0)
-                    {
-                        <h3>전체 목록</h3>
-                        <UserTable UserModel="_userDept" SelectedUserModel="_selectUsers" IsRoot=true OnSelectUserEvent="SelectUser"/>
-                    }
-                </td>
-                <td class="select-user-table">
-                    @if (_selectUsers.Count > 0)
-                    {
-                        <h3>선택 된 사람</h3>
-                        <SelectUserTable SelectUser="_selectUsers" OnUnSelectUserEvent="UnSelectUserEvent" />
-                    }
-                </td>
-            </tr>
-        </table>
+        <div>
+            <button @onclick=CallUserEvent disabled=@CallButtonEnable() >채팅하기</button>
+        </div>   
+        <div class="user-table">
+            <div class="search-user-table">
+                <h3>유저 검색</h3>
+                <SearchUserTable SelectUser="_selectUsers" OnSelectSearchUserEvent="SelectSearchUser" />
+            </div>
+            <div class="all-user-table">
+                @if (_userDept.Count > 0)
+                {
+                    <h3>전체 목록</h3>
+                    <UserTable UserModel="_userDept" SelectedUserModel="_selectUsers" IsRoot=true OnSelectUserEvent="SelectUser"/>
+                }
+            </div>
+            <div class="select-user-table">
+                @if (_selectUsers.Count > 0)
+                {
+                    <h3>선택 된 사람</h3>
+                    <SelectUserTable SelectUser="_selectUsers" OnUnSelectUserEvent="UnSelectUserEvent" />
+                }
+            </div>
+        </div>
     </div>
 }
 else
@@ -103,23 +98,32 @@ else
         try
         {
             var currentUser = await teamsUserCredential.GetUserInfoAsync();
-            var users = (await GetGraphService().Users.Request().GetAsync()).CurrentPage;
-            for (int i = 0; i < users.Count; i++)
+            var users = await GetGraphService().Users.Request().GetAsync();
+            while(true)
             {
-                if (users[i].Id == currentUser.ObjectId)
+                for (int i = 0; i < users.CurrentPage.Count; i++)
                 {
-                    _currentUser = users[i];
-                    continue;
+                    if (users.CurrentPage[i].Id == currentUser.ObjectId)
+                    {
+                        _currentUser = users.CurrentPage[i];
+                        continue;
+                    }
+                    if (users.CurrentPage[i].Mail == null || users.CurrentPage[i].Mail.Length <= 0)
+                    {
+                        continue;
+                    }
+                    if (users.CurrentPage[i].DisplayName.Contains("관리자") || users.CurrentPage[i].DisplayName.Contains("테스트"))
+                    {
+                        continue;
+                    }
+                    _allUsers.Add(users.CurrentPage[i]);
                 }
-                if (users[i].Mail == null || users[i].Mail.Length <= 0)
+                if (users.NextPageRequest == null)
                 {
-                    continue;
+                    break;
                 }
-                if (users[i].DisplayName.Contains("관리자"))
-                {
-                    continue;
-                }
-                _allUsers.Add(users[i]);
+
+                users = await users.NextPageRequest.GetAsync();
             }
 
             _allUsers.Sort(delegate (User x, User y)
@@ -130,12 +134,12 @@ else
                 else return x.OfficeLocation.CompareTo(y.OfficeLocation);
             });
 
-            _allUsers.FindAll(x => !x.OfficeLocation.Contains("/")).ForEach(x =>
+            _allUsers.FindAll(x => !(x.OfficeLocation ?? "").Contains("/")).ForEach(x =>
             {
                 _userDept.Add(new UserDeptModel(x.OfficeLocation, x));
             });
 
-            _allUsers.FindAll(x => x.OfficeLocation.Contains("/")).ForEach(x =>
+            _allUsers.FindAll(x => (x.OfficeLocation ?? "").Contains("/")).ForEach(x =>
             {
                 UserDeptModel.SetChild(_userDept, x, 0);
             });
@@ -147,11 +151,14 @@ else
     }
     private void SelectSearchUser(User user)
     {
-        
+        if (_selectUsers.Find(x => x.Id == user.Id) == null)
+        {
+            _selectUsers.Add(user);
+        }
     }
     private void SelectUser(User user)
     {
-        if (_selectUsers.Find(x => x == user) == null)
+        if (_selectUsers.Find(x => x.Id == user.Id) == null)
         {
             _selectUsers.Add(user);
         }
@@ -200,7 +207,8 @@ else
         {
             var ret = await GetGraphService().Chats.Request().AddAsync(chat);
             var webUrl = ret.AdditionalData["webUrl"].ToString();
-            await JSRuntime.InvokeVoidAsync("open", $"{webUrl}", "_blank");
+            await JSRuntime.InvokeVoidAsync("openInternet", webUrl);
+            //            await JSRuntime.InvokeVoidAsync("open", $"{webUrl}", "_blank");
         }
         catch (Exception ex)
         {
@@ -208,6 +216,17 @@ else
             _errorMessage = ex.Message;
         }
         return;
+    }
+    private bool CallButtonEnable()
+    {
+        if (_selectUsers.Count > 0)
+        {
+            return false;
+        }
+        else
+        {
+            return true;
+        }
     }
     private GraphServiceClient GetGraphService()
     {
